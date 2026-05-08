@@ -218,8 +218,8 @@ const App: React.FC = () => {
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={reset}>
-            <img src="/hh-logo.jpg" alt="Homework Helper" className="h-10 w-10 rounded-xl shadow-lg object-cover" />
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 hidden sm:block">Nora's Homework Helper</h1>
+            <img src="/hh-logo.jpg" alt="Homework Helper" className="h-9 w-9 rounded-xl shadow-lg object-cover shrink-0" />
+            <h1 className="text-base font-bold text-slate-800 dark:text-slate-100 leading-tight">Nora's Homework Helper</h1>
           </div>
           <div className="flex items-center gap-3">
             {state !== AppState.SCANNING && (
