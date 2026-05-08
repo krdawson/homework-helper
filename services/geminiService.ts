@@ -92,7 +92,7 @@ Match each problem you see in the image to the corresponding problem above. You 
   }));
 
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     contents: {
       parts: [
         ...imageParts,
@@ -209,7 +209,7 @@ export const generatePracticeProblems = async (
     ?? `Generate ${count} NEW practice problems that target the same concepts and skills, using different numbers/scenarios but testing the same ideas.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.0-flash',
     contents: {
       parts: [{
         text: `You are a ${subject} tutor generating practice problems for a ${profile.gradeLevel} student${profile.name ? ` named ${profile.name}` : ''}.
