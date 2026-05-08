@@ -1,0 +1,8 @@
+{
+  "name": "Homework Help AI",
+  "description": "Scan your math homework (typed or handwritten) and get instant feedback on whether your answers are correct.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

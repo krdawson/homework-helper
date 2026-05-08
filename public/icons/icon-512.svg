@@ -1,0 +1,15 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512'>
+  <rect width='512' height='512' rx='92' fill='#4f46e5'/>
+  <!-- book -->
+  <rect x='112.5' y='92' width='287' height='236' rx='6' fill='white' opacity='0.95'/>
+  <line x1='256' y1='92' x2='256' y2='328' stroke='#4f46e5' stroke-width='3'/>
+  <!-- lines on book -->
+  <line x1='124.5' y1='174.6' x2='248' y2='174.6' stroke='#c7d2fe' stroke-width='3' stroke-linecap='round'/>
+  <line x1='124.5' y1='221.8' x2='248' y2='221.8' stroke='#c7d2fe' stroke-width='3' stroke-linecap='round'/>
+  <line x1='124.5' y1='269' x2='248' y2='269' stroke='#c7d2fe' stroke-width='3' stroke-linecap='round'/>
+  <!-- AI spark -->
+  <text x='293.31' y='238.32' font-family='Arial' font-size='92' fill='#fbbf24' text-anchor='middle'>✦</text>
+  <!-- checkmark bottom -->
+  <circle cx='256' cy='410' r='67' fill='#22c55e'/>
+  <polyline points='220,410 251,441 302,374' fill='none' stroke='white' stroke-width='18' stroke-linecap='round' stroke-linejoin='round'/>
+</svg>
