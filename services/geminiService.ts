@@ -1,13 +1,15 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { HomeworkAnalysis, UserProfile } from "../types";
+import { HomeworkAnalysis, UserProfile, PracticeSet } from "../types";
+
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzeMathHomework = async (
   base64Images: string | string[],
-  profile?: UserProfile
+  profile?: UserProfile,
+  practiceContext?: PracticeSet
 ): Promise<HomeworkAnalysis> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+  const ai = getAI();
   const images = Array.isArray(base64Images) ? base64Images : [base64Images];
   const hintMode = profile?.hintMode ?? false;
 
@@ -15,11 +17,17 @@ export const analyzeMathHomework = async (
     ? `The student is named ${profile.name || 'the student'} and is at a ${profile.gradeLevel} level.`
     : "The student's grade level is unknown.";
 
+  const practiceInstruction = practiceContext
+    ? `IMPORTANT: The student was given these specific practice problems to solve:
+${practiceContext.problems.map((p, i) => `${i + 1}. ${p.problemText} [Correct answer: ${p.correctAnswer}]`).join('\n')}
+Match each problem you see in the image to the corresponding problem above. You already know the correct answers — use them to grade accurately.`
+    : '';
+
   const hintInstruction = hintMode
     ? `4. For each INCORRECT answer, provide:
-       - A short "hint": a single guiding question or gentle nudge pointing to the concept they got wrong WITHOUT giving away the answer (e.g. "What happens when you multiply two negative numbers?")
+       - A short "hint": a single guiding question or gentle nudge pointing to the concept they got wrong WITHOUT giving away the answer.
        - The "correctAnswer" and full "explanation" — these will be hidden from the student until they ask.`
-    : `4. For each INCORRECT answer, provide the correct answer and a clear explanation tailored to their grade level. Also include a short "hint" field with a guiding question in case it's needed.`;
+    : `4. For each INCORRECT answer, provide the correct answer and a clear explanation tailored to their grade level. Also include a short "hint" field with a guiding question.`;
 
   const imageParts = images.map(data => ({
     inlineData: { mimeType: 'image/jpeg' as const, data },
@@ -32,6 +40,7 @@ export const analyzeMathHomework = async (
         ...imageParts,
         {
           text: `You are a professional math tutor. ${studentContext}
+${practiceInstruction}
 ${images.length > 1 ? `Analyze these ${images.length} images of a multi-page homework worksheet. Treat all pages as one assignment and provide a single combined score.` : 'Analyze this image of math homework.'} It may contain typed text or student handwriting.
 
 Your tasks:
@@ -75,13 +84,13 @@ Return the data in the specified JSON format. Do not score unworked problems as 
                 explanation: { type: Type.STRING },
                 hint: {
                   type: Type.STRING,
-                  description: "A guiding question that nudges the student toward the right answer without revealing it."
+                  description: "A guiding question that nudges the student toward the right answer without revealing it.",
                 },
                 highlightedProblemText: { type: Type.STRING },
                 highlightedStudentAnswer: { type: Type.STRING },
                 isUnworked: {
                   type: Type.BOOLEAN,
-                  description: "True if the student has not attempted this problem."
+                  description: "True if the student has not attempted this problem.",
                 },
               },
               required: ["id", "problemText", "studentAnswer", "isCorrect", "correctAnswer", "explanation"],
@@ -105,6 +114,75 @@ Return the data in the specified JSON format. Do not score unworked problems as 
 
   const text = response.text;
   if (!text) throw new Error("No response from AI");
-
   return JSON.parse(text) as HomeworkAnalysis;
+};
+
+export const generatePracticeProblems = async (
+  previousAnalysis: HomeworkAnalysis,
+  profile: UserProfile,
+  count = 5
+): Promise<PracticeSet> => {
+  const ai = getAI();
+
+  const wrongProblems = previousAnalysis.problems.filter(p => !p.isCorrect && !p.isUnworked);
+  const allProblems = previousAnalysis.problems.filter(p => !p.isUnworked);
+
+  const problemsForContext = wrongProblems.length > 0 ? wrongProblems : allProblems;
+
+  const contextLines = problemsForContext
+    .map(p => `- Problem: "${p.problemText}" | Student answer: "${p.studentAnswer}" | Correct: "${p.correctAnswer}" | Issue: "${p.explanation}"`)
+    .join('\n');
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-pro-preview-05-06',
+    contents: {
+      parts: [{
+        text: `You are a math tutor generating practice problems for a ${profile.gradeLevel} student${profile.name ? ` named ${profile.name}` : ''}.
+
+${wrongProblems.length > 0
+  ? `The student recently struggled with these problems:\n${contextLines}\n\nGenerate ${count} NEW practice problems that target the same concepts and skills they got wrong. Use different numbers and scenarios but test the same mathematical ideas.`
+  : `The student recently worked on these problems:\n${contextLines}\n\nGenerate ${count} NEW practice problems at a similar difficulty level to reinforce these concepts.`
+}
+
+Requirements:
+- Each problem should be solvable with pencil and paper (no calculator required unless appropriate for ${profile.gradeLevel})
+- Difficulty should match ${profile.gradeLevel} level
+- Write the problem clearly and concisely
+- Include the exact correct answer (just the final value, not steps)
+- Number them with unique IDs
+
+Return the problems as JSON.`,
+      }],
+    },
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          problems: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                problemText: { type: Type.STRING },
+                correctAnswer: { type: Type.STRING },
+              },
+              required: ["id", "problemText", "correctAnswer"],
+            },
+          },
+        },
+        required: ["problems"],
+      },
+    },
+  });
+
+  const text = response.text;
+  if (!text) throw new Error("No response from AI");
+
+  const parsed = JSON.parse(text);
+  return {
+    problems: parsed.problems,
+    gradeLevel: profile.gradeLevel,
+  };
 };

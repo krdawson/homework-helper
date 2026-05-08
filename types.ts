@@ -32,11 +32,24 @@ export interface UserProfile {
   hintMode?: boolean;
 }
 
+export interface PracticeProblem {
+  id: string;
+  problemText: string;
+  correctAnswer: string;
+}
+
+export interface PracticeSet {
+  problems: PracticeProblem[];
+  gradeLevel: string;
+}
+
 export enum AppState {
   IDLE = 'IDLE',
   SCANNING = 'SCANNING',
   STAGING = 'STAGING',
   ANALYZING = 'ANALYZING',
   RESULTS = 'RESULTS',
-  SETTINGS = 'SETTINGS'
+  SETTINGS = 'SETTINGS',
+  PRACTICE_GENERATING = 'PRACTICE_GENERATING',
+  PRACTICE_READY = 'PRACTICE_READY',
 }

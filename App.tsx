@@ -1,10 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AppState, HomeworkAnalysis, SavedAnalysis, UserProfile } from './types';
-import { analyzeMathHomework } from './services/geminiService';
+import { AppState, HomeworkAnalysis, SavedAnalysis, UserProfile, PracticeSet } from './types';
+import { analyzeMathHomework, generatePracticeProblems } from './services/geminiService';
 import ProblemCard from './components/ProblemCard';
 import CameraView from './components/CameraView';
 import SettingsPage from './components/SettingsPage';
+import PracticeView from './components/PracticeView';
 import { resizeImage, loadImage } from './utils/imageProcessing';
 
 const STORAGE_KEY = 'mathcheck_history';
@@ -31,6 +32,8 @@ const App: React.FC = () => {
   });
   const [worksheetMode, setWorksheetMode] = useState(false);
   const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
+  const [practiceSet, setPracticeSet] = useState<PracticeSet | null>(null);
+  const [practiceError, setPracticeError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -86,13 +89,31 @@ const App: React.FC = () => {
     }
   };
 
-  const processImages = async (images: StagedImage[]) => {
+  const startPractice = async (fromResults: HomeworkAnalysis) => {
+    setState(AppState.PRACTICE_GENERATING);
+    setPracticeError(null);
+    try {
+      const generated = await generatePracticeProblems(fromResults, profile);
+      setPracticeSet(generated);
+      setState(AppState.PRACTICE_READY);
+    } catch (err) {
+      console.error(err);
+      setPracticeError("Couldn't generate practice problems. Please try again.");
+      setState(AppState.RESULTS);
+    }
+  };
+
+  const processImages = async (images: StagedImage[], activePracticeSet?: PracticeSet | null) => {
     setState(AppState.ANALYZING);
     setCapturedImage(images[0]?.dataUrl ?? null);
     setError(null);
 
     try {
-      const analysis = await analyzeMathHomework(images.map(i => i.base64), profile);
+      const analysis = await analyzeMathHomework(
+        images.map(i => i.base64),
+        profile,
+        activePracticeSet ?? undefined
+      );
 
       if (analysis.isBlankPage) {
         setError("Wait! It looks like this page is blank or doesn't have any answers yet. Please do the problems first before scanning!");
@@ -104,6 +125,7 @@ const App: React.FC = () => {
 
       setResults(analysis);
       saveToHistory(analysis);
+      setPracticeSet(null);
       setState(AppState.RESULTS);
     } catch (err) {
       console.error(err);
@@ -126,7 +148,7 @@ const App: React.FC = () => {
         setState(AppState.STAGING);
       } else {
         setCapturedImage(dataUrl);
-        processImages([{ dataUrl, base64 }]);
+        processImages([{ dataUrl, base64 }], practiceSet);
       }
     } catch (err) {
       console.error("Error processing gallery image:", err);
@@ -141,7 +163,7 @@ const App: React.FC = () => {
       setState(AppState.STAGING);
     } else {
       setCapturedImage(dataUrl);
-      processImages([{ dataUrl, base64: base64String }]);
+      processImages([{ dataUrl, base64: base64String }], practiceSet);
     }
   };
 
@@ -157,6 +179,8 @@ const App: React.FC = () => {
     setCapturedImage(null);
     setError(null);
     setStagedImages([]);
+    setPracticeSet(null);
+    setPracticeError(null);
   };
 
   const triggerCamera = () => setState(AppState.SCANNING);
@@ -207,9 +231,9 @@ const App: React.FC = () => {
                 </svg>
               </button>
             )}
-            {(state === AppState.RESULTS || state === AppState.STAGING) && (
+            {(state === AppState.RESULTS || state === AppState.STAGING || state === AppState.PRACTICE_READY) && (
               <button
-                onClick={reset}
+                onClick={state === AppState.PRACTICE_READY ? () => setState(AppState.RESULTS) : reset}
                 className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors px-2"
               >
                 Back
@@ -341,7 +365,11 @@ const App: React.FC = () => {
         {state === AppState.SCANNING && (
           <CameraView
             onCapture={onCameraCapture}
-            onCancel={() => setState(worksheetMode && stagedImages.length > 0 ? AppState.STAGING : AppState.IDLE)}
+            onCancel={() => {
+              if (practiceSet) setState(AppState.PRACTICE_READY);
+              else if (worksheetMode && stagedImages.length > 0) setState(AppState.STAGING);
+              else setState(AppState.IDLE);
+            }}
           />
         )}
 
@@ -409,6 +437,31 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {/* PRACTICE GENERATING */}
+        {state === AppState.PRACTICE_GENERATING && (
+          <div className="flex flex-col items-center justify-center h-[70vh] space-y-6">
+            <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-600 dark:text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">Generating Practice Problems...</h3>
+              <p className="text-slate-500 dark:text-slate-400">Tailoring problems for {profile.gradeLevel}.</p>
+            </div>
+          </div>
+        )}
+
+        {/* PRACTICE READY */}
+        {state === AppState.PRACTICE_READY && practiceSet && (
+          <PracticeView
+            practiceSet={practiceSet}
+            onScanWork={() => setState(AppState.SCANNING)}
+            onChooseFromGallery={triggerGallery}
+            onCancel={() => setState(AppState.RESULTS)}
+          />
         )}
 
         {/* ANALYZING */}
@@ -490,14 +543,28 @@ const App: React.FC = () => {
         />
       </main>
 
-      {state === AppState.RESULTS && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-50 dark:from-slate-900 to-transparent flex justify-center z-10">
-          <button
-            onClick={reset}
-            className="w-full max-w-xs bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 transition-all"
-          >
-            New Scan
-          </button>
+      {state === AppState.RESULTS && results && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-50 dark:from-slate-900 to-transparent z-10">
+          <div className="flex gap-3 max-w-sm mx-auto">
+            <button
+              onClick={reset}
+              className="flex-1 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold py-4 rounded-2xl active:scale-95 transition-all"
+            >
+              New Scan
+            </button>
+            <button
+              onClick={() => startPractice(results)}
+              className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              Practice More
+            </button>
+          </div>
+          {practiceError && (
+            <p className="text-center text-red-500 text-xs mt-2">{practiceError}</p>
+          )}
         </div>
       )}
     </div>
