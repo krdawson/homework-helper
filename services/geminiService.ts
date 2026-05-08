@@ -2,7 +2,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { HomeworkAnalysis, UserProfile, PracticeSet, Subject } from "../types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAI = () => {
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set — add it to Vercel environment variables.");
+  return new GoogleGenAI({ apiKey });
+};
 
 const SUBJECT_INSTRUCTIONS: Record<Subject, string> = {
   Math: `
@@ -88,7 +92,7 @@ Match each problem you see in the image to the corresponding problem above. You 
   }));
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-1.5-pro',
     contents: {
       parts: [
         ...imageParts,
@@ -205,7 +209,7 @@ export const generatePracticeProblems = async (
     ?? `Generate ${count} NEW practice problems that target the same concepts and skills, using different numbers/scenarios but testing the same ideas.`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-1.5-pro',
     contents: {
       parts: [{
         text: `You are a ${subject} tutor generating practice problems for a ${profile.gradeLevel} student${profile.name ? ` named ${profile.name}` : ''}.
