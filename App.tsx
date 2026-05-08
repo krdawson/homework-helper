@@ -137,9 +137,16 @@ const App: React.FC = () => {
       saveToHistory(analysis);
       setPracticeSet(null);
       setState(AppState.RESULTS);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to analyze homework. Please make sure the photo is clear and try again.");
+    } catch (err: unknown) {
+      console.error('Analysis error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('API_KEY') || msg.includes('API key') || msg.includes('403')) {
+        setError("API key error — make sure GEMINI_API_KEY is set in Vercel environment variables.");
+      } else if (msg.includes('not found') || msg.includes('404')) {
+        setError("AI model not found. Please check the model name in geminiService.ts.");
+      } else {
+        setError(`Analysis failed: ${msg}`);
+      }
       setState(AppState.IDLE);
     }
   };
