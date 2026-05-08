@@ -1,12 +1,22 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AppState, HomeworkAnalysis, SavedAnalysis, UserProfile, PracticeSet } from './types';
+import { AppState, HomeworkAnalysis, SavedAnalysis, UserProfile, PracticeSet, Subject } from './types';
 import { analyzeMathHomework, generatePracticeProblems } from './services/geminiService';
 import ProblemCard from './components/ProblemCard';
 import CameraView from './components/CameraView';
 import SettingsPage from './components/SettingsPage';
 import PracticeView from './components/PracticeView';
 import { resizeImage, loadImage } from './utils/imageProcessing';
+
+const SUBJECT_COLORS: Record<Subject, string> = {
+  Math:        'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  Spelling:    'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+  Vocabulary:  'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  Grammar:     'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+  Science:     'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  History:     'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  Other:       'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+};
 
 const STORAGE_KEY = 'mathcheck_history';
 const THEME_KEY = 'theme';
@@ -335,10 +345,17 @@ const App: React.FC = () => {
                       className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-2xl flex items-center justify-between text-left hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors shadow-sm active:bg-slate-50 dark:active:bg-slate-700"
                     >
                       <div className="space-y-1">
-                        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{formatDate(item.timestamp)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{formatDate(item.timestamp)}</p>
+                          {item.subject && (
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${SUBJECT_COLORS[item.subject] ?? SUBJECT_COLORS.Other}`}>
+                              {item.subject}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-slate-700 dark:text-slate-200 font-semibold line-clamp-1">{item.summary}</p>
                       </div>
-                      <div className="bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-lg">
+                      <div className="bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-lg shrink-0">
                         <span className="text-indigo-700 dark:text-indigo-300 font-black text-sm">{item.score}</span>
                       </div>
                     </button>
@@ -494,7 +511,12 @@ const App: React.FC = () => {
           <div className="space-y-6 pb-24 animate-in slide-in-from-bottom-4 duration-500">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col space-y-4">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="space-y-1">
+                  {results.subject && (
+                    <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${SUBJECT_COLORS[results.subject] ?? SUBJECT_COLORS.Other}`}>
+                      {results.subject}
+                    </span>
+                  )}
                   <p className="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider">Overall Score</p>
                   <h3 className="text-4xl font-black text-indigo-600 dark:text-indigo-400">{results.score}</h3>
                 </div>

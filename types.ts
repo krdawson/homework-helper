@@ -12,8 +12,11 @@ export interface MathProblem {
   isUnworked?: boolean;
 }
 
+export type Subject = 'Math' | 'Spelling' | 'Vocabulary' | 'Grammar' | 'Science' | 'History' | 'Other';
+
 export interface HomeworkAnalysis {
   problems: MathProblem[];
+  subject: Subject;
   summary: string;
   score: string;
   handwritingLegibilityFeedback?: string;
