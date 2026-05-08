@@ -219,7 +219,7 @@ const App: React.FC = () => {
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={reset}>
             <img src="/hh-logo.jpg" alt="Homework Helper" className="h-10 w-10 rounded-xl shadow-lg object-cover" />
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 hidden sm:block">Homework Help AI</h1>
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 hidden sm:block">Nora's Homework Helper</h1>
           </div>
           <div className="flex items-center gap-3">
             {state !== AppState.SCANNING && (
@@ -255,7 +255,6 @@ const App: React.FC = () => {
         {state === AppState.IDLE && (
           <div className="flex flex-col items-center py-8 space-y-8">
             <div className="text-center space-y-4">
-              <img src="/hh-logo.jpg" alt="Homework Helper" className="w-24 h-24 rounded-3xl shadow-xl object-cover mx-auto mb-2" />
               <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
                 {profile.name ? `Hi, ${profile.name}!` : 'Check Your Work'}
               </h2>
@@ -303,7 +302,7 @@ const App: React.FC = () => {
             <div className="w-full max-w-sm flex flex-col gap-3">
               <button
                 onClick={triggerCamera}
-                className="w-full bg-indigo-600 text-white text-lg font-bold py-5 rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+                className="w-full bg-teal-600 text-white text-lg font-bold py-5 rounded-2xl shadow-xl shadow-teal-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -436,7 +435,7 @@ const App: React.FC = () => {
             <div className="w-full max-w-sm flex flex-col gap-3">
               <button
                 onClick={() => processImages(stagedImages)}
-                className="w-full bg-indigo-600 text-white text-lg font-bold py-5 rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+                className="w-full bg-teal-600 text-white text-lg font-bold py-5 rounded-2xl shadow-xl shadow-teal-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
