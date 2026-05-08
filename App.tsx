@@ -13,6 +13,11 @@ const PROFILE_KEY = 'mathcheck_profile';
 
 type Theme = 'light' | 'dark' | 'system';
 
+interface StagedImage {
+  dataUrl: string;
+  base64: string;
+}
+
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.IDLE);
   const [results, setResults] = useState<HomeworkAnalysis | null>(null);
@@ -22,12 +27,13 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>((localStorage.getItem(THEME_KEY) as Theme) || 'system');
   const [profile, setProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem(PROFILE_KEY);
-    return saved ? JSON.parse(saved) : { name: '', gradeLevel: 'Middle School' };
+    return saved ? JSON.parse(saved) : { name: '', gradeLevel: 'Middle School', hintMode: false };
   });
+  const [worksheetMode, setWorksheetMode] = useState(false);
+  const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Theme effect
   useEffect(() => {
     const root = window.document.documentElement;
     if (theme === 'dark') {
@@ -46,12 +52,10 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Profile save effect
   useEffect(() => {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   }, [profile]);
 
-  // Load history on mount
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -68,8 +72,9 @@ const App: React.FC = () => {
       ...analysis,
       savedId: Math.random().toString(36).substr(2, 9),
       timestamp: Date.now(),
+      hintMode: profile.hintMode,
     };
-    const updatedHistory = [newSaved, ...history].slice(0, 20); // Keep last 20
+    const updatedHistory = [newSaved, ...history].slice(0, 20);
     setHistory(updatedHistory);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory));
   };
@@ -81,17 +86,19 @@ const App: React.FC = () => {
     }
   };
 
-  const processImage = async (base64String: string) => {
+  const processImages = async (images: StagedImage[]) => {
     setState(AppState.ANALYZING);
+    setCapturedImage(images[0]?.dataUrl ?? null);
     setError(null);
 
     try {
-      const analysis = await analyzeMathHomework(base64String, profile);
-      
+      const analysis = await analyzeMathHomework(images.map(i => i.base64), profile);
+
       if (analysis.isBlankPage) {
         setError("Wait! It looks like this page is blank or doesn't have any answers yet. Please do the problems first before scanning!");
         setState(AppState.IDLE);
         setCapturedImage(null);
+        setStagedImages([]);
         return;
       }
 
@@ -108,12 +115,19 @@ const App: React.FC = () => {
   const handleCapture = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = '';
 
     try {
       const img = await loadImage(file);
       const { dataUrl, base64 } = await resizeImage(img);
-      setCapturedImage(dataUrl);
-      processImage(base64);
+
+      if (worksheetMode) {
+        setStagedImages(prev => [...prev, { dataUrl, base64 }]);
+        setState(AppState.STAGING);
+      } else {
+        setCapturedImage(dataUrl);
+        processImages([{ dataUrl, base64 }]);
+      }
     } catch (err) {
       console.error("Error processing gallery image:", err);
       setError("Failed to process the selected image. Please try another one.");
@@ -121,8 +135,14 @@ const App: React.FC = () => {
   };
 
   const onCameraCapture = (base64String: string) => {
-    setCapturedImage(`data:image/jpeg;base64,${base64String}`);
-    processImage(base64String);
+    const dataUrl = `data:image/jpeg;base64,${base64String}`;
+    if (worksheetMode) {
+      setStagedImages(prev => [...prev, { dataUrl, base64: base64String }]);
+      setState(AppState.STAGING);
+    } else {
+      setCapturedImage(dataUrl);
+      processImages([{ dataUrl, base64: base64String }]);
+    }
   };
 
   const loadHistoryItem = (item: SavedAnalysis) => {
@@ -136,22 +156,26 @@ const App: React.FC = () => {
     setResults(null);
     setCapturedImage(null);
     setError(null);
+    setStagedImages([]);
   };
 
-  const triggerCamera = () => {
-    setState(AppState.SCANNING);
-  };
+  const triggerCamera = () => setState(AppState.SCANNING);
+  const triggerGallery = () => fileInputRef.current?.click();
 
-  const triggerGallery = () => {
-    fileInputRef.current?.click();
+  const removeStagedImage = (index: number) => {
+    setStagedImages(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (updated.length === 0) setState(AppState.IDLE);
+      return updated;
+    });
   };
 
   const formatDate = (ts: number) => {
-    return new Date(ts).toLocaleDateString(undefined, { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(ts).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -169,11 +193,11 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-3">
             {state !== AppState.SCANNING && (
-              <button 
+              <button
                 onClick={() => setState(state === AppState.SETTINGS ? AppState.IDLE : AppState.SETTINGS)}
                 className={`p-2.5 rounded-xl transition-all ${
-                  state === AppState.SETTINGS 
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none' 
+                  state === AppState.SETTINGS
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
                 title="Profile Settings"
@@ -183,8 +207,8 @@ const App: React.FC = () => {
                 </svg>
               </button>
             )}
-            {(state === AppState.RESULTS) && (
-              <button 
+            {(state === AppState.RESULTS || state === AppState.STAGING) && (
+              <button
                 onClick={reset}
                 className="text-indigo-600 dark:text-indigo-400 font-bold hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors px-2"
               >
@@ -196,20 +220,22 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 max-w-3xl mx-auto w-full p-4">
+
+        {/* IDLE */}
         {state === AppState.IDLE && (
           <div className="flex flex-col items-center py-8 space-y-8">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center mx-auto mb-2">
-                 <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                 </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
               </div>
               <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
                 {profile.name ? `Hi, ${profile.name}!` : 'Check Your Work'}
               </h2>
               <p className="text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-                Snap a photo of your math problems and Gemini 3 Pro will grade it.
+                Snap a photo of your homework and AI will grade it instantly.
               </p>
             </div>
 
@@ -222,6 +248,33 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {/* Scan mode toggle */}
+            <div className="w-full max-w-sm">
+              <button
+                onClick={() => setWorksheetMode(v => !v)}
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl transition-colors ${worksheetMode ? 'bg-indigo-100 dark:bg-indigo-900/40' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${worksheetMode ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className={`font-semibold ${worksheetMode ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                      Worksheet Mode
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {worksheetMode ? 'Scan multiple pages, then analyze together' : 'Tap to scan a multi-page worksheet'}
+                    </p>
+                  </div>
+                </div>
+                <div className={`relative w-12 h-6 rounded-full transition-colors ${worksheetMode ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${worksheetMode ? 'translate-x-7' : 'translate-x-1'}`} />
+                </div>
+              </button>
+            </div>
+
             <div className="w-full max-w-sm flex flex-col gap-3">
               <button
                 onClick={triggerCamera}
@@ -230,9 +283,9 @@ const App: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 </svg>
-                Open Camera
+                {worksheetMode ? 'Scan First Page' : 'Open Camera'}
               </button>
-              
+
               <button
                 onClick={triggerGallery}
                 className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-lg font-bold py-4 rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3"
@@ -240,11 +293,11 @@ const App: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                Choose from Gallery
+                {worksheetMode ? 'Choose First Page' : 'Choose from Gallery'}
               </button>
             </div>
 
-            {/* History Section */}
+            {/* History */}
             {history.length > 0 && (
               <div className="w-full max-w-sm space-y-4 pt-4">
                 <div className="flex items-center justify-between px-1">
@@ -272,9 +325,10 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* SETTINGS */}
         {state === AppState.SETTINGS && (
-          <SettingsPage 
-            profile={profile} 
+          <SettingsPage
+            profile={profile}
             setProfile={setProfile}
             theme={theme}
             setTheme={setTheme}
@@ -283,13 +337,81 @@ const App: React.FC = () => {
           />
         )}
 
+        {/* SCANNING */}
         {state === AppState.SCANNING && (
-          <CameraView 
-            onCapture={onCameraCapture} 
-            onCancel={() => setState(AppState.IDLE)} 
+          <CameraView
+            onCapture={onCameraCapture}
+            onCancel={() => setState(worksheetMode && stagedImages.length > 0 ? AppState.STAGING : AppState.IDLE)}
           />
         )}
 
+        {/* STAGING — worksheet page collection */}
+        {state === AppState.STAGING && (
+          <div className="flex flex-col items-center py-8 space-y-6 animate-in slide-in-from-bottom-4 duration-300">
+            <div className="w-full max-w-sm text-center space-y-1">
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Worksheet Pages</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                {stagedImages.length} page{stagedImages.length !== 1 ? 's' : ''} ready · Add more or analyze now
+              </p>
+            </div>
+
+            {/* Thumbnails */}
+            <div className="w-full max-w-sm flex flex-wrap gap-3 justify-center">
+              {stagedImages.map((img, i) => (
+                <div key={i} className="relative">
+                  <img
+                    src={img.dataUrl}
+                    alt={`Page ${i + 1}`}
+                    className="w-24 h-32 object-cover rounded-2xl border-2 border-indigo-200 dark:border-indigo-700 shadow-md"
+                  />
+                  <span className="absolute top-1.5 left-1.5 bg-indigo-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-lg">
+                    {i + 1}
+                  </span>
+                  <button
+                    onClick={() => removeStagedImage(i)}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold shadow"
+                    aria-label="Remove page"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {stagedImages.length < 6 && (
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={triggerCamera}
+                    className="w-24 h-32 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500 hover:border-indigo-400 hover:text-indigo-500 active:scale-95 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span className="text-xs font-medium">Camera</span>
+                  </button>
+                  <button
+                    onClick={triggerGallery}
+                    className="w-24 h-8 border border-slate-300 dark:border-slate-600 rounded-xl flex items-center justify-center text-xs text-slate-400 dark:text-slate-500 hover:border-indigo-400 hover:text-indigo-500 active:scale-95 transition-all"
+                  >
+                    Gallery
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full max-w-sm flex flex-col gap-3">
+              <button
+                onClick={() => processImages(stagedImages)}
+                className="w-full bg-indigo-600 text-white text-lg font-bold py-5 rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Analyze Worksheet ({stagedImages.length} page{stagedImages.length !== 1 ? 's' : ''})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ANALYZING */}
         {state === AppState.ANALYZING && (
           <div className="flex flex-col items-center justify-center h-[70vh] space-y-6">
             <div className="relative w-48 h-64 rounded-2xl overflow-hidden shadow-2xl border-4 border-white dark:border-slate-700 bg-slate-200 dark:bg-slate-800">
@@ -297,7 +419,7 @@ const App: React.FC = () => {
                 <img src={capturedImage} alt="Scanning" className="w-full h-full object-cover" />
               )}
               <div className="absolute inset-0 bg-indigo-600/20 flex items-center justify-center">
-                 <div className="w-full h-1 bg-white/80 absolute top-0 animate-[scan_2s_ease-in-out_infinite]"></div>
+                <div className="w-full h-1 bg-white/80 absolute top-0 animate-[scan_2s_ease-in-out_infinite]"></div>
               </div>
             </div>
             <style>{`
@@ -314,6 +436,7 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* RESULTS */}
         {state === AppState.RESULTS && results && (
           <div className="space-y-6 pb-24 animate-in slide-in-from-bottom-4 duration-500">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col space-y-4">
@@ -326,7 +449,16 @@ const App: React.FC = () => {
                   <p className="text-slate-600 dark:text-slate-300 text-sm italic">{results.summary}</p>
                 </div>
               </div>
-              
+
+              {profile.hintMode && (
+                <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 px-4 py-2.5 rounded-2xl">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Hint Mode is on — tap "Reveal Answer" to see solutions</p>
+                </div>
+              )}
+
               {results.handwritingLegibilityFeedback && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 p-4 rounded-2xl flex gap-3 items-start">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -343,7 +475,7 @@ const App: React.FC = () => {
             <div className="space-y-4">
               <h4 className="text-lg font-bold text-slate-800 dark:text-slate-100 ml-1">Problem Details</h4>
               {results.problems.map((problem) => (
-                <ProblemCard key={problem.id} problem={problem} />
+                <ProblemCard key={problem.id} problem={problem} hintMode={profile.hintMode} />
               ))}
             </div>
           </div>
@@ -360,7 +492,7 @@ const App: React.FC = () => {
 
       {state === AppState.RESULTS && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-50 dark:from-slate-900 to-transparent flex justify-center z-10">
-          <button 
+          <button
             onClick={reset}
             className="w-full max-w-xs bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none active:scale-95 transition-all"
           >

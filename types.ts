@@ -6,6 +6,7 @@ export interface MathProblem {
   isCorrect: boolean;
   correctAnswer: string;
   explanation: string;
+  hint?: string;
   highlightedProblemText?: string;
   highlightedStudentAnswer?: string;
   isUnworked?: boolean;
@@ -22,16 +23,19 @@ export interface HomeworkAnalysis {
 export interface SavedAnalysis extends HomeworkAnalysis {
   savedId: string;
   timestamp: number;
+  hintMode?: boolean;
 }
 
 export interface UserProfile {
   name: string;
   gradeLevel: string;
+  hintMode?: boolean;
 }
 
 export enum AppState {
   IDLE = 'IDLE',
   SCANNING = 'SCANNING',
+  STAGING = 'STAGING',
   ANALYZING = 'ANALYZING',
   RESULTS = 'RESULTS',
   SETTINGS = 'SETTINGS'
